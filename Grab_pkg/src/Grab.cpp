@@ -108,8 +108,8 @@ int main(int argc, char** argv)
     }
 
     // ===== Step 4: 机械臂移到货物识别点 =====
-    ROS_INFO("===== Step 4: 移至货物识别点 (180, -180, 70) =====");
-    if (!arm_move(180, -180, 80)) {
+    ROS_INFO("===== Step 4: 移至货物识别点 (180, -180, 90) =====");
+    if (!arm_move(180, -180, 90)) {
         return -1;
     }
 
@@ -135,8 +135,8 @@ int main(int argc, char** argv)
     ROS_INFO("共检测到 %zu 个货物标签 [%s]，最小ID=%d",
              cargo_ids_detected.size(), ids_str.c_str(), min_id);
 
-    // ===== Step 6: 移动到最小ID货物标签正上方 30mm =====
-    ROS_INFO("===== Step 6: 移至货物标签 %d 上方30mm =====", min_id);
+    // ===== Step 6: 移动到最小ID货物标签正上方 40mm =====
+    ROS_INFO("===== Step 6: 移至货物标签 %d 上方40mm =====", min_id);
     tf::TransformListener listener;
     tf::StampedTransform transform;
     std::string target_frame = "ar_marker_" + std::to_string(min_id);
@@ -152,10 +152,10 @@ int main(int argc, char** argv)
     float cargo_x = transform.getOrigin().x() * 1000;
     float cargo_y = transform.getOrigin().y() * 1000;
     float cargo_z_surface = transform.getOrigin().z() * 1000;  // 货物表面
-    float tag_z = cargo_z_surface + 30;  // 上方30mm
+    float tag_z = cargo_z_surface + 40;  // 上方40mm
 
     ROS_INFO("货物标签位置: (%.2f, %.2f, %.2f)mm", cargo_x, cargo_y, cargo_z_surface);
-    ROS_INFO("目标位置(上方30mm): (%.2f, %.2f, %.2f)mm", cargo_x, cargo_y, tag_z);
+    ROS_INFO("目标位置(上方40mm): (%.2f, %.2f, %.2f)mm", cargo_x, cargo_y, tag_z);
 
     if (!arm_move(cargo_x, cargo_y, tag_z)) {
         return -1;
@@ -171,17 +171,32 @@ int main(int argc, char** argv)
     // 抬起
     arm_move(cargo_x, cargo_y, tag_z);
 
-    // ===== Step 8: 移至出刀点1，松开货物 =====
-    ROS_INFO("===== Step 9: 移至出刀点1 (107, 115, 42) =====");
-    // 入刀
-    arm_move(107, 115, 52);
-    // 下降到放置点
-    arm_move(107, 115, 42);
-    ros::Duration(1.0).sleep();
-    // 关闭吸盘，松开货物
-    set_pump(false);
-    // 出刀
-    arm_move(107, 115, 52);
+    // ===== Step 8: 放置货物（选择出刀点）=====
+    bool point1_occupied = false;
+    nh.param("placement_point_1_occupied", point1_occupied, false);
+
+    if (!point1_occupied) {
+        // 出刀点1 未被占用 → 使用出刀点1
+        ROS_INFO("===== Step 8: 移至出刀点1 (107, 115, 42) =====");
+        arm_move(107, 115, 92);   // 升至出刀点上方50mm处
+        ros::Duration(1.0).sleep();
+        arm_move(107, 115, 42);   // 缓慢下移至放置点
+        ros::Duration(1.0).sleep();
+        set_pump(false);           // 关闭吸盘，松开货物
+        arm_move(107, 115, 52);   // 出刀
+        // 标记出刀点1 为已占用
+        nh.setParam("placement_point_1_occupied", true);
+        ROS_WARN("出刀点1 已标记为占用");
+    } else {
+        // 出刀点1 已被占用 → 使用出刀点2
+        ROS_INFO("===== Step 8: 出刀点1已被占用，移至出刀点2 (107, 185, 42) =====");
+        arm_move(107, 185, 92);   // 升至出刀点上方50mm处
+        ros::Duration(1.0).sleep();
+        arm_move(107, 185, 42);   // 缓慢下移至放置点
+        ros::Duration(1.0).sleep();
+        set_pump(false);           // 关闭吸盘，松开货物
+        arm_move(107, 185, 52);   // 出刀
+    }
 
     // ===== Step 9: 回到安全点 =====
     ROS_INFO("===== Step 9: 回到安全点 (150, 0, 120) =====");

@@ -37,6 +37,12 @@ bool arm_move(float x, float y, float z)
     }
 }
 
+void safe_retract()
+{
+    ROS_WARN("检测失败，正在收回机械臂至安全点...");
+    arm_move(150, 0, 120);
+}
+
 void set_pump(bool state)
 {
     ROS_INFO("等待抓取服务启动...");
@@ -93,17 +99,20 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    // ===== Step 3: 被动识别定位标签 100 =====
-    ROS_INFO("===== Step 3: 等待AR标签 100 识别... =====");
+    // ===== Step 3: 被动识别定位标签 100 (超时10秒) =====
+    ROS_INFO("===== Step 3: 等待AR标签 100 识别... (超时10秒) =====");
     ar_sub = nh.subscribe("hand_camera/ar_pose_marker", 10, arMarkerCallback);
 
+    ros::Time tag_wait_start = ros::Time::now();
     ros::Rate rate(10);
-    while (ros::ok() && !tag_100_detected) {
+    while (ros::ok() && !tag_100_detected &&
+           (ros::Time::now() - tag_wait_start).toSec() < 10.0) {
         ros::spinOnce();
         rate.sleep();
     }
     if (!tag_100_detected) {
         ROS_ERROR("定位失败：未识别到AR标签 100");
+        safe_retract();
         return -1;
     }
 
@@ -124,6 +133,7 @@ int main(int argc, char** argv)
 
     if (cargo_ids_detected.empty()) {
         ROS_ERROR("识别失败：未检测到任何货物标签 (ID:1~4)");
+        safe_retract();
         return -1;
     }
 
@@ -146,6 +156,7 @@ int main(int argc, char** argv)
         listener.lookupTransform("Base", target_frame, ros::Time(0), transform);
     } catch (tf::TransformException& ex) {
         ROS_ERROR("获取货物标签TF坐标失败: %s", ex.what());
+        safe_retract();
         return -1;
     }
 
@@ -158,6 +169,7 @@ int main(int argc, char** argv)
     ROS_INFO("目标位置(上方40mm): (%.2f, %.2f, %.2f)mm", cargo_x, cargo_y, tag_z);
 
     if (!arm_move(cargo_x, cargo_y, tag_z)) {
+        safe_retract();
         return -1;
     }
 
@@ -177,25 +189,35 @@ int main(int argc, char** argv)
 
     if (!point1_occupied) {
         // 出刀点1 未被占用 → 使用出刀点1
-        ROS_INFO("===== Step 8: 移至出刀点1 (107, 115, 42) =====");
-        arm_move(107, 115, 92);   // 升至出刀点上方50mm处
-        ros::Duration(1.0).sleep();
-        arm_move(107, 115, 42);   // 缓慢下移至放置点
+        float p1_x = 107, p1_y = 115, p1_z = 42;
+        float p1_above_z = p1_z + 30;  // 上方30mm
+
+        ROS_INFO("===== Step 8: 移至出刀点1上方30mm (%.0f, %.0f, %.0f) =====", p1_x, p1_y, p1_above_z);
+        arm_move(p1_x, p1_y, p1_above_z);
+
+        // 等待x,y坐标对齐出刀点（arm_move返回时已对齐）
+        ROS_INFO("x,y坐标已对齐出刀点1，下降至放置高度");
+        arm_move(p1_x, p1_y, p1_z);
         ros::Duration(1.0).sleep();
         set_pump(false);           // 关闭吸盘，松开货物
-        arm_move(107, 115, 52);   // 出刀
+        arm_move(p1_x, p1_y, p1_z + 10);   // 出刀
         // 标记出刀点1 为已占用
         nh.setParam("placement_point_1_occupied", true);
         ROS_WARN("出刀点1 已标记为占用");
     } else {
         // 出刀点1 已被占用 → 使用出刀点2
-        ROS_INFO("===== Step 8: 出刀点1已被占用，移至出刀点2 (107, 185, 42) =====");
-        arm_move(107, 185, 92);   // 升至出刀点上方50mm处
-        ros::Duration(1.0).sleep();
-        arm_move(107, 185, 42);   // 缓慢下移至放置点
+        float p2_x = 107, p2_y = 185, p2_z = 42;
+        float p2_above_z = p2_z + 50;  // 上方50mm（出刀点1有货物，抬高防撞）
+
+        ROS_INFO("===== Step 8: 出刀点1已被占用，移至出刀点2上方50mm (%.0f, %.0f, %.0f) =====", p2_x, p2_y, p2_above_z);
+        arm_move(p2_x, p2_y, p2_above_z);
+
+        // 等待x,y坐标对齐出刀点（arm_move返回时已对齐）
+        ROS_INFO("x,y坐标已对齐出刀点2，下降至放置高度");
+        arm_move(p2_x, p2_y, p2_z);
         ros::Duration(1.0).sleep();
         set_pump(false);           // 关闭吸盘，松开货物
-        arm_move(107, 185, 52);   // 出刀
+        arm_move(p2_x, p2_y, p2_z + 10);   // 出刀
     }
 
     // ===== Step 9: 回到安全点 =====

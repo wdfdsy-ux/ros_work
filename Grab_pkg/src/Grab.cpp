@@ -183,41 +183,44 @@ int main(int argc, char** argv)
     // 抬起
     arm_move(cargo_x, cargo_y, tag_z);
 
-    // ===== Step 8: 放置货物（选择出刀点）=====
+    // ===== Step 8: 先垂直上升50mm，再平移到出刀点正上方，最后下降放置 =====
     bool point1_occupied = false;
     nh.param("placement_point_1_occupied", point1_occupied, false);
 
+    // 从当前抓取高度再垂直上升50mm
+    float lift_z = tag_z + 50;  // 在抓取高度上再抬升50mm
+    ROS_INFO("===== Step 8: 垂直上升50mm至 (%.2f, %.2f, %.2f) =====", cargo_x, cargo_y, lift_z);
+    arm_move(cargo_x, cargo_y, lift_z);
+
     if (!point1_occupied) {
-        // 出刀点1 未被占用 → 使用出刀点1
+        // 出刀点1 未被占用 → 在升高的高度平移到出刀点1正上方
         float p1_x = 107, p1_y = 115, p1_z = 42;
-        float p1_above_z = p1_z + 30;  // 上方30mm
 
-        ROS_INFO("===== Step 8: 移至出刀点1上方30mm (%.0f, %.0f, %.0f) =====", p1_x, p1_y, p1_above_z);
-        arm_move(p1_x, p1_y, p1_above_z);
+        ROS_INFO("===== 平移到出刀点1正上方 (%.0f, %.0f, %.2f) =====", p1_x, p1_y, lift_z);
+        arm_move(p1_x, p1_y, lift_z);
 
-        // 等待x,y坐标对齐出刀点（arm_move返回时已对齐）
-        ROS_INFO("x,y坐标已对齐出刀点1，下降至放置高度");
+        // 横纵坐标已对齐出刀点1，下降放置
+        ROS_INFO("横纵坐标已对齐出刀点1，下降至放置高度");
         arm_move(p1_x, p1_y, p1_z);
         ros::Duration(1.0).sleep();
         set_pump(false);           // 关闭吸盘，松开货物
-        arm_move(p1_x, p1_y, p1_z + 10);   // 出刀
+        arm_move(p1_x, p1_y, p1_z + 30);   // 出刀（向上30mm防撞）
         // 标记出刀点1 为已占用
         nh.setParam("placement_point_1_occupied", true);
         ROS_WARN("出刀点1 已标记为占用");
     } else {
-        // 出刀点1 已被占用 → 使用出刀点2
+        // 出刀点1 已被占用 → 在升高的高度平移到出刀点2正上方
         float p2_x = 107, p2_y = 185, p2_z = 42;
-        float p2_above_z = p2_z + 50;  // 上方50mm（出刀点1有货物，抬高防撞）
 
-        ROS_INFO("===== Step 8: 出刀点1已被占用，移至出刀点2上方50mm (%.0f, %.0f, %.0f) =====", p2_x, p2_y, p2_above_z);
-        arm_move(p2_x, p2_y, p2_above_z);
+        ROS_INFO("===== 出刀点1已被占用，平移到出刀点2正上方 (%.0f, %.0f, %.2f) =====", p2_x, p2_y, lift_z);
+        arm_move(p2_x, p2_y, lift_z);
 
-        // 等待x,y坐标对齐出刀点（arm_move返回时已对齐）
-        ROS_INFO("x,y坐标已对齐出刀点2，下降至放置高度");
+        // 横纵坐标已对齐出刀点2，下降放置
+        ROS_INFO("横纵坐标已对齐出刀点2，下降至放置高度");
         arm_move(p2_x, p2_y, p2_z);
         ros::Duration(1.0).sleep();
         set_pump(false);           // 关闭吸盘，松开货物
-        arm_move(p2_x, p2_y, p2_z + 10);   // 出刀
+        arm_move(p2_x, p2_y, p2_z + 30);   // 出刀（向上30mm防撞）
     }
 
     // ===== Step 9: 回到安全点 =====

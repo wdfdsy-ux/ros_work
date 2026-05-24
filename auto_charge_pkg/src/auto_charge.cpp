@@ -15,9 +15,12 @@ typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseCl
 MoveBaseClient* nav_client;
 
 bool set_ARtrack(int id, float dist){
-    // 等待服务上线
+    // 等待服务上线（超时10秒）
     ROS_INFO("等待服务 /track 启动...");
-    track_client.waitForExistence();
+    if (!track_client.waitForExistence(ros::Duration(10.0))) {
+        ROS_ERROR("服务 /track 连接超时！");
+        return false;
+    }
     ROS_INFO("服务已连接！");
     ar_pose::Track srv;
     srv.request.ar_id = id;
@@ -38,9 +41,12 @@ bool set_ARtrack(int id, float dist){
 }
 
 bool set_relmove(float x,float y,float theta){
-    // 等待服务上线
+    // 等待服务上线（超时10秒）
     ROS_INFO("等待服务 /relative_move 启动...");
-    relmove_client.waitForExistence();
+    if (!relmove_client.waitForExistence(ros::Duration(10.0))) {
+        ROS_ERROR("服务 /relative_move 连接超时！");
+        return false;
+    }
     ROS_INFO("服务已连接！");
     // 定义服务消息
     relative_move::SetRelativeMove srv;
@@ -67,9 +73,12 @@ bool set_relmove(float x,float y,float theta){
 
 
 bool navToGoal(double x, double y, double z, double w){
-    // 等待服务器连接成功
+    // 等待服务器连接成功（超时10秒）
     ROS_INFO("等待连接 move_base 服务器...");
-    nav_client->waitForServer();
+    if (!nav_client->waitForServer(ros::Duration(10.0))) {
+        ROS_ERROR("move_base 服务器连接超时！");
+        return false;
+    }
     ROS_INFO("连接成功！");
     nav_client->cancelAllGoals();
     ROS_WARN("已清空所有导航任务！");
@@ -147,17 +156,17 @@ int main(int argc, char** argv)
     nav_client = new MoveBaseClient("move_base",true);
 
     if (!navToGoal(0.3, 1.7499, 0.7, 0.7)){
-        return 0;
+        return 1;
     }
     if (!set_ARtrack(0,0.4)){
-        return 0;
+        return 1;
     }
-    if (!set_relmove(0.18,0,0)){
-        return 0;
+    if (!set_relmove(0.20,0,0)){
+        return 1;
     }
     ros::Duration(2.0).sleep();
     if (!set_relmove(-0.2,0,0)){
-        return 0;
+        return 1;
     }
     delete nav_client; // 程序结束释放资源
     return 0;

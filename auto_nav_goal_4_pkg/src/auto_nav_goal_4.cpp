@@ -172,9 +172,9 @@ int main(int argc, char** argv) {
 
         ros::Duration(1.0).sleep();
 
-        if (!set_relmove(-0.18, 0, 0)) {
-            return -1;
-        }
+        // if (!set_relmove(-0.18, 0, 0)) {
+        //     return -1;
+        // }
 
     } catch (ros::Exception& e) {
         ROS_ERROR("程序被中断：%s", e.what());

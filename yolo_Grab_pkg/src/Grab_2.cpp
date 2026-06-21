@@ -216,12 +216,27 @@ public:
     bool isInWorkspace(float x, float y, float z)
     {
         // 工作空间边界 (根据实际机械臂调整)
-        const float x_min = 50.0f,  x_max = 300.0f;
-        const float y_min = -300.0f, y_max = 300.0f;
+        const float x_min = 50.0f,  x_max = 250.0f;
+        const float y_min = -250.0f, y_max = 250.0f;
         const float z_min = 20.0f,  z_max = 250.0f;
         return (x >= x_min && x <= x_max &&
                 y >= y_min && y <= y_max &&
                 z >= z_min && z <= z_max);
+    }
+
+    // 将目标坐标钳位到工作空间边界内
+    void clampToWorkspace(float& x, float& y, float& z)
+    {
+        const float x_min = 50.0f,  x_max = 250.0f;
+        const float y_min = -250.0f, y_max = 250.0f;
+        const float z_min = 20.0f,  z_max = 250.0f;
+
+        if (x < x_min) { x = x_min; ROS_WARN("Clamped X to %.0f (out of workspace)", x_min); }
+        if (x > x_max) { x = x_max; ROS_WARN("Clamped X to %.0f (out of workspace)", x_max); }
+        if (y < y_min) { y = y_min; ROS_WARN("Clamped Y to %.0f (out of workspace)", y_min); }
+        if (y > y_max) { y = y_max; ROS_WARN("Clamped Y to %.0f (out of workspace)", y_max); }
+        if (z < z_min) { z = z_min; ROS_WARN("Clamped Z to %.0f (out of workspace)", z_min); }
+        if (z > z_max) { z = z_max; ROS_WARN("Clamped Z to %.0f (out of workspace)", z_max); }
     }
 
     bool armMove(float x, float y, float z)
@@ -311,8 +326,8 @@ public:
     // ======================================================================
     void safeRetract()
     {
-        ROS_WARN("=== Safe retract → (%.0f, %.0f, %.0f) ===", safe_x_, safe_y_, safe_z_);
-        armMove(safe_x_, safe_y_, safe_z_);
+        ROS_WARN("=== Safe retract → (150, 0, 120) ===");
+        armMove(150.0f, 0.0f, 120.0f);
     }
 
     // ======================================================================
@@ -359,6 +374,17 @@ public:
         ROS_INFO("After offset (%.1f, %.1f, %.1f): (%.2f, %.2f, %.2f) mm",
                  offset_x_, offset_y_, offset_z_, obj_x, obj_y, obj_z);
 
+        // 自动钳位到工作空间边界内（防越界）
+        float obj_x_raw = obj_x, obj_y_raw = obj_y, obj_z_raw = obj_z;
+        clampToWorkspace(obj_x, obj_y, obj_z);
+        if (std::abs(obj_x - obj_x_raw) > 0.1f ||
+            std::abs(obj_y - obj_y_raw) > 0.1f ||
+            std::abs(obj_z - obj_z_raw) > 0.1f)
+        {
+            ROS_WARN("Target clamped to workspace: (%.2f, %.2f, %.2f) → (%.2f, %.2f, %.2f)",
+                     obj_x_raw, obj_y_raw, obj_z_raw, obj_x, obj_y, obj_z);
+        }
+
         // Z 为负时记录警告（可能 TF 偏移），但仍尝试抓取，grasp_z 有下限保护
         if (obj_z < 0.0f)
         {
@@ -377,7 +403,7 @@ public:
         }
 
         // ===== Step 4: 下降至抓取高度 (取物块 Z 与下限值中的较大值) =====
-        float grasp_z = std::max(obj_z + grasp_offset_, 30.0f);
+        float grasp_z = 30.0f;
         ROS_INFO("===== Step 4: Descend to grasp → (%.2f, %.2f, %.2f) =====",
                  obj_x, obj_y, grasp_z);
         if (!armMove(obj_x, obj_y, grasp_z))

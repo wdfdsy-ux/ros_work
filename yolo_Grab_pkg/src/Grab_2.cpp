@@ -377,7 +377,7 @@ public:
         }
 
         // ===== Step 4: 下降至抓取高度 (取物块 Z 与下限值中的较大值) =====
-        float grasp_z = std::max(obj_z + grasp_offset_, 35.0f);
+        float grasp_z = std::max(obj_z + grasp_offset_, 25.0f);
         ROS_INFO("===== Step 4: Descend to grasp → (%.2f, %.2f, %.2f) =====",
                  obj_x, obj_y, grasp_z);
         if (!armMove(obj_x, obj_y, grasp_z))
